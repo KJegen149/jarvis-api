@@ -1,0 +1,19 @@
+name = "jarvis-api"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jarvis-projects"
+database_id = "a8e22d59-6e15-4336-bc44-38286cb95322"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "jarvis-files"
+
+[[kv_namespaces]]
+binding = "TOKENS"
+id = "ac2169c86fcd4ce7bdd939ebd949e9bc"
+
+[ai]
+binding = "AI"
