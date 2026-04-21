@@ -14,22 +14,30 @@ WHAT YOU CAN DO:
 - Control home devices (lights, switches, etc.) via Home Assistant
 
 HOW 3D MODEL GENERATION WORKS:
-When asked to design or create a 3D model, respond with the OpenSCAD code inside a fenced code block tagged as "openscad" (e.g. \`\`\`openscad ... \`\`\`). The dashboard detects this block and shows the user a "⚙ Generate STL" button — clicking it sends the code to the HoloMat pipeline, renders it with OpenSCAD, and loads the result directly into the 3D viewer. You do not need to mention file transfers or downloads; the pipeline handles it. If the request is ambiguous, make a reasonable assumption and note it briefly.
+There are two generation modes. Choose based on the request — do not ask the user which to use, just pick the right one.
 
-OPENSCAD BEST PRACTICES — always follow these:
-- Set $fn=64 at the top for smooth curves (cylinders, spheres, etc.). Use $fn=128 for anything that needs a fine finish.
-- Think in millimeters. Real-world dimensions make prints useful.
-- Use difference() for cutouts/holes, union() for joining parts, intersection() for clipping.
-- Use hull() for smooth organic transitions between shapes.
-- Use named variables at the top (e.g. wall=2; height=30;) so dimensions are easy to follow.
-- Use modules for repeated geometry — don't duplicate code.
-- Always ensure the model is manifold (watertight) — avoid zero-thickness walls and coincident faces.
-- Design for printability: avoid large overhangs >45°, add chamfers/fillets where stress is likely.
-- Printer build volume is 256×256×256mm (Bambu Lab P1S). Keep parts within this unless designing for assembly.
-- For threaded holes or press fits, add 0.2mm clearance.
-- Prefer parametric designs — if a user asks for a box, make wall thickness, dimensions, and any features variables.
-- Always end the file with the top-level call that actually renders the model (don't just define modules without calling them).
-- Brief inline comments on non-obvious geometry are helpful.
+**DEFAULT — Meshy.AI (use this for most requests):**
+For any organic, visual, artistic, or general 3D model request, respond with a short confirmation sentence then a meshy code block containing an optimised text-to-3D prompt:
+\`\`\`meshy
+[detailed description: shape, style, materials, key features — 1-3 sentences]
+\`\`\`
+The dashboard automatically triggers Meshy generation and loads the result in the 3D viewer. Do not describe the generation process or mention credits.
+
+**EXCEPTION — OpenSCAD (parametric/mechanical only):**
+Only use OpenSCAD when the user explicitly asks for parametric design, exact dimensions, mechanical parts, threaded holes, or says "OpenSCAD". Respond with the code in an openscad block:
+\`\`\`openscad
+[code here]
+\`\`\`
+The dashboard shows a "⚙ Generate STL" button the user clicks to render it.
+
+OPENSCAD BEST PRACTICES (when used):
+- Set $fn=64 at the top for smooth curves. Use $fn=128 for fine finish.
+- Think in millimeters. Use named variables at the top for all dimensions.
+- Use difference() for cutouts, union() for joining, hull() for organic transitions.
+- Use modules for repeated geometry. Always end with the top-level render call.
+- Manifold only — no zero-thickness walls or coincident faces.
+- Design for printability: avoid overhangs >45°, add chamfers where needed.
+- Printer build volume: 256×256×256mm (Bambu Lab P1S).
 
 HOW THINGIVERSE SEARCH WORKS:
 When the user asks you to find, search for, or look up a model/design, the system automatically searches Thingiverse and injects the results into your context. Present the results naturally — mention the top options by name and tell the user the cards are shown below for them to click through. Do not fabricate URLs or titles beyond what is provided.
@@ -178,6 +186,16 @@ async function callLLM(message, history, env) {
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    try {
+      return await handleRequest(request, env);
+    } catch (e) {
+      console.error('[jarvis] Unhandled worker error:', e?.message ?? e);
+      return err(`Worker error: ${e?.message ?? 'unknown'}`, 500);
+    }
+  },
+};
+
+async function handleRequest(request, env) {
     if (!authCheck(request, env)) return err('Unauthorized', 401);
 
     const url    = new URL(request.url);
@@ -457,11 +475,17 @@ export default {
       if (!env.MESHY_API_KEY) return err('Meshy not configured', 500);
       const { prompt, art_style = 'realistic', negative_prompt = 'low quality, distorted, deformed' } = await request.json();
       if (!prompt) return err('prompt required');
-      const r = await fetch('https://api.meshy.ai/openapi/v2/text-to-3d', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.MESHY_API_KEY}` },
-        body: JSON.stringify({ mode: 'preview', prompt, art_style, negative_prompt }),
-      });
+      let r;
+      try {
+        r = await fetch('https://api.meshy.ai/openapi/v2/text-to-3d', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.MESHY_API_KEY}` },
+          body: JSON.stringify({ mode: 'preview', prompt, art_style, negative_prompt }),
+        });
+      } catch (fetchErr) {
+        console.error('[jarvis] Meshy generate fetch failed:', fetchErr?.message);
+        return err(`Meshy API unreachable: ${fetchErr?.message ?? 'network error'}`, 502);
+      }
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
         return err(e.message ?? `Meshy API ${r.status}`, r.status === 402 ? 402 : 502);
@@ -526,5 +550,4 @@ export default {
     }
 
     return err('Not found', 404);
-  },
-};
+}
