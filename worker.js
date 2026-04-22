@@ -8,76 +8,61 @@ const SYSTEM_PROMPT = `You are Jarvis, an AI fabrication assistant embedded in a
 
 WHAT YOU CAN DO:
 - Answer questions and hold conversations
-- Generate 3D models via Meshy.AI (organic/aesthetic) or OpenSCAD (parametric/exact dimensions)
+- Create and manage projects (see PROJECT MANAGEMENT below)
+- Generate 3D models via Meshy.AI (user-driven) or OpenSCAD (parametric)
 - Search Thingiverse for existing models
 - Generate SVG cut designs for the Cricut Explore 4
 - Control home devices via Home Assistant
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROJECT MANAGEMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Your [CONTEXT] block (injected at end of every user message) lists existing projects and the active one.
+
+CREATE a project automatically when:
+- User describes something new to make and no suitable project exists yet
+- User explicitly asks to start a project
+Use this tag anywhere in your response (it is processed and stripped before display):
+[ACTION:create_project:Short Name:type]
+  type = 3d_model | svg | other
+  Short Name = 2–4 words, Title Case, descriptive
+  Example: "Let's get started.[ACTION:create_project:Phone Stand:3d_model]"
+
+DO NOT create a project if one already exists with the same purpose — just use it.
+DO NOT create a project for vague conversational messages ("hello", "thanks", general questions).
+
+DELETE the active project only when user EXPLICITLY requests deletion AND confirms.
+First ask: "Are you sure you want to delete [project name]? This cannot be undone."
+On confirmation, use: [ACTION:delete_project]
+
 PROJECT TYPE ENFORCEMENT:
-The active project type will be injected into your context. You MUST obey it:
-- [PROJECT:3d_model] → ONLY output \`\`\`meshy or \`\`\`openscad blocks. Never SVG.
-- [PROJECT:svg] → ONLY output \`\`\`svg blocks. Never Meshy or OpenSCAD.
-- [PROJECT:other] or no tag → use best judgement.
-If the user requests the wrong output type for their project, tell them and offer the correct alternative.
+Active project type is injected as [PROJECT:type] prefix. Obey it:
+- [PROJECT:3d_model] → 3D advice, OpenSCAD if asked, Thingiverse search. NO \`\`\`meshy blocks — user generates via ⚡ button.
+- [PROJECT:svg] → \`\`\`svg blocks only. No Meshy, no OpenSCAD.
+- No tag → use best judgement.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MESHY.AI TEXT-TO-3D  (default for 3D projects)
+3D MODELS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-FDM CONTEXT — every Meshy model will be printed in plastic on a Bambu P1S:
-- No material finishes. No wood grain, brushed metal, chrome, leather, fabric. Output is smooth plastic.
-- Functional features = physical geometry only. Never describe the object inside a housing — describe the housing itself.
-- Describe SHAPE and STRUCTURE. Never describe colour, texture, finish, or rendering properties.
+3D generation happens through the ⚡ Generate button — users submit prompts DIRECTLY to Meshy. You do NOT output \`\`\`meshy blocks. Never.
 
-RESPONSE FORMAT — one short acknowledgment sentence, then the block. Nothing else outside the block:
-\`\`\`meshy
-[prompt — max 600 characters]
-\`\`\`
+You CAN help the user craft a better prompt if they ask ("what should I include in my Meshy prompt for X?"):
+- Describe shape and structure only — no materials, finishes, or textures (it's FDM plastic)
+- Single focused object, not a scene
+- Use geometric terms: spherical, cylindrical, tapered, faceted, hollow, convex, ridged, chamfered
+- Use structural terms: base, arm, shelf, cradle, slot, recess, groove, tab, wall, lip, bracket, cutout
+- Replace functional descriptions with housing geometry:
+  "cable management" → "U-shaped groove along underside with two raised retaining tabs"
+  "MagSafe" → "shallow circular recessed pocket on rear face"
+  "cable pass-through" → "rectangular slot through base edge"
 
-MESHY PROMPT STRUCTURE (follow this order every time):
-1. Object name + primary form  →  "A compact phone stand"
-2. Key structural geometry  →  "with angled cradle, splayed tapered legs, shallow circular recess on rear face, U-shaped groove along underside with two raised retaining tabs"
-3. Form/style language (shape-affecting only)  →  "mid-century modern tapered silhouette" / "angular industrial ribbing" / "smooth organic flowing form"
-4. Symmetry + proportion  →  "bilaterally symmetric, compact and squat"
-
-WHAT MESHY RESPONDS TO WELL:
-- Single focused object — not a scene, room, or environment
-- Geometric terms: spherical, cylindrical, angular, tapered, faceted, hollow, convex, concave, ridged, flared, chamfered, filleted
-- Structural terms: base, plinth, arm, shelf, cradle, slot, recess, groove, tab, wall, lip, arch, rib, rail, bracket, cutout, pocket, cavity
-- Style-as-shape: mid-century modern, art deco, brutalist, streamlined, geometric, organic — only if they imply a recognisable silhouette
-
-BANNED WORDS — Meshy renders these as literal prop objects in the scene. Never use them:
-cable, wire, cord, rope, tube, pipe, thread, strap, band, chain, plug, socket
-→ Replace with structural housing: groove, channel, slot, clip, bracket, retaining tab, pass-through, recess, cutout
-
-ALSO NEVER USE (Meshy ignores or misinterprets):
-wood, aluminum, metal, leather, fabric, chrome, brushed, matte, glossy, realistic, textured, material, cozy, elegant, luxurious, warm, lit, shadowed, reflective
-→ Use geometric equivalents: tapered, clean-lined, proportioned, ribbed, faceted
-
-FUNCTIONAL TRANSLATION TABLE — always use the structural housing, never the thing inside it:
-"cable management"     → "U-shaped groove along underside with two raised retaining tabs on each end"
-"MagSafe / wireless"   → "shallow circular recessed pocket on rear face"
-"cable pass-through"   → "rectangular slot through base edge"
-"ventilation"          → "row of rectangular slots along side walls"
-"speaker grille"       → "grid of small circular through-holes on front face"
-"button / switch"      → "raised oval protrusion on top surface"
-"phone cradle"         → "angled rectangular channel with raised front lip"
-"pen/stylus holder"    → "cylindrical vertical pocket on side wall"
-"hinge"                → "two interlocking cylindrical knuckles with shared axis"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OPENSCAD  (parametric / exact dimensions only)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Only use when user explicitly asks for exact dimensions, parametric design, threaded holes, mechanical fit, or says "OpenSCAD".
+OPENSCAD (parametric / exact dimensions only) — only when user asks for exact dimensions or says "OpenSCAD":
 \`\`\`openscad
 [code]
 \`\`\`
-- $fn=64 for smooth curves ($fn=128 for fine finish)
-- Named variables for all dimensions, think in mm
-- difference() for cutouts, hull() for organic transitions, modules for repeated geometry
-- Manifold only — no zero-thickness walls or coincident faces
-- Overhangs <45°, build volume 256×256×256mm
+- $fn=64 for smooth curves. Named variables for all dimensions (mm). Manifold only. Build volume 256×256×256mm.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SVG FOR CRICUT EXPLORE 4  (svg projects only)
@@ -85,12 +70,18 @@ SVG FOR CRICUT EXPLORE 4  (svg projects only)
 
 One short acknowledgment, then the block. Dashboard auto-saves and opens the SVG viewer.
 \`\`\`svg
-[markup]
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  [paths and shapes here]
+</svg>
 \`\`\`
-CRITICAL: Use ONLY the \`\`\`svg language tag — NEVER \`\`\`xml or any other tag. The dashboard looks for exactly \`\`\`svg.
-- Always include viewBox. Vector paths/shapes only — no rasters, no JS, no DOCTYPE, no XML header.
-- Cut lines: stroke="black" fill="none". Filled shapes = print-then-cut.
-- All tags closed. Clean, self-contained markup.
+
+SVG RULES — read every one before generating:
+1. ROOT ELEMENT: ALWAYS <svg viewBox="..." xmlns="http://www.w3.org/2000/svg"> — NEVER use <g> as the root.
+2. LANGUAGE TAG: ALWAYS \`\`\`svg — NEVER \`\`\`xml or anything else.
+3. ONE DESIGN PER BLOCK: output ONE focused design per \`\`\`svg block. If the user asks for multiple options, output MULTIPLE separate \`\`\`svg blocks, one per option — each with its own acknowledgment line.
+4. KEEP IT CONCISE: Cricut cuts simple vector shapes. Use <path>, <circle>, <rect>, <ellipse>, <polygon>, <line>, <text>. Avoid deeply nested groups. No XML comments (<!-- -->). No inline styles — use SVG attributes.
+5. CUT LINES: stroke="black" fill="none". Filled shapes = print-then-cut.
+6. ALL TAGS CLOSED. No partial output — if you cannot fit the complete SVG, make it simpler instead of truncating it.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 THINGIVERSE SEARCH
@@ -388,35 +379,88 @@ async function handleRequest(request, env) {
                     : project_type === 'svg'       ? '[PROJECT:svg] '
                     : '';
 
-      // Detect search intent and run Makerworld search if needed
+      // ── Inject project context so Jarvis knows what exists ────────────────
+      const { results: allProjects } = await env.DB.prepare(
+        'SELECT id, name, type FROM projects ORDER BY updated_at DESC LIMIT 20'
+      ).all();
+      const activeProj = project_id ? allProjects.find(p => p.id === project_id) : null;
+      const projContextStr = `\n\n[CONTEXT: Active project: ${
+        activeProj ? `"${activeProj.name}" (${activeProj.type})` : 'none'
+      }. All projects: ${
+        allProjects.length ? allProjects.map(p => `"${p.name}"(${p.type})`).join(', ') : 'none'
+      }]`;
+
+      // ── Detect Thingiverse search intent ──────────────────────────────────
       let searchResults = null;
-      let llmMessage = typeTag + message;
+      let llmMessage = typeTag + message + projContextStr;   // typeTag preserved even with search
       const searchQuery = detectSearchIntent(message);
       if (searchQuery) {
         searchResults = await searchThingiverse(searchQuery, env);
         if (searchResults?.length) {
-          llmMessage = message + '\n\n[THINGIVERSE RESULTS for "' + searchQuery + '":\n' +
+          llmMessage = typeTag + message +
+            '\n\n[THINGIVERSE RESULTS for "' + searchQuery + '":\n' +
             searchResults.map((r, i) =>
               `${i+1}. "${r.title}" — ${r.likes} likes, ${r.downloads} downloads — ${r.url}`
             ).join('\n') +
-            '\n\nPresent these results naturally. Mention standout options by name. The cards are already shown in the dashboard — no need to list URLs.]';
+            '\n\nPresent these results naturally. Mention standout options by name. The cards are shown in the dashboard — no need to list URLs.]' +
+            projContextStr;
         }
       }
 
-      const response = await callLLM(llmMessage, history, env);
+      const rawResponse = await callLLM(llmMessage, history, env);
+
+      // ── Process [ACTION:...] tags from Jarvis response ────────────────────
+      let newProject = null;
+      let deletedProjectId = null;
+      const actionRe = /\[ACTION:([^\]]+)\]/g;
+      let am;
+      while ((am = actionRe.exec(rawResponse)) !== null) {
+        const parts = am[1].split(':');
+        const aType = parts[0];
+        if (aType === 'create_project') {
+          const pName = (parts[1] || 'New Project').trim();
+          const pType = (parts[2] || 'other').trim();
+          const pid = uuid(), pNow = new Date().toISOString();
+          try {
+            await env.DB.prepare(
+              'INSERT INTO projects (id,name,type,status,description,created_at,updated_at) VALUES (?,?,?,?,?,?,?)'
+            ).bind(pid, pName, pType, 'active', '', pNow, pNow).run();
+            newProject = { id: pid, name: pName, type: pType, status: 'active', description: '', created_at: pNow, updated_at: pNow };
+          } catch (e) { console.error('[jarvis] Project create failed:', e.message); }
+        } else if (aType === 'delete_project') {
+          const delId = project_id;
+          if (delId) {
+            try {
+              const { results: pFiles } = await env.DB.prepare('SELECT r2_key FROM files WHERE project_id=?').bind(delId).all();
+              await Promise.all(pFiles.map(f => env.FILES.delete(f.r2_key)));
+              await env.DB.batch([
+                env.DB.prepare('DELETE FROM files WHERE project_id=?').bind(delId),
+                env.DB.prepare('DELETE FROM messages WHERE project_id=?').bind(delId),
+                env.DB.prepare('DELETE FROM projects WHERE id=?').bind(delId),
+              ]);
+              deletedProjectId = delId;
+            } catch (e) { console.error('[jarvis] Project delete failed:', e.message); }
+          }
+        }
+      }
+      // Strip action tags so they don't appear in the stored/displayed message
+      const response = rawResponse.replace(/\s*\[ACTION:[^\]]+\]/g, '').trim();
+
+      // ── Store messages (use processed project_id — might be new) ──────────
+      const saveProjectId = newProject?.id ?? project_id;
       const now = new Date().toISOString();
-      if (project_id) {
-        const proj = await env.DB.prepare('SELECT id FROM projects WHERE id=?').bind(project_id).first();
+      if (saveProjectId && !deletedProjectId) {
+        const proj = await env.DB.prepare('SELECT id FROM projects WHERE id=?').bind(saveProjectId).first();
         if (proj) {
           const t2 = new Date(Date.now()+1).toISOString();
           await env.DB.batch([
-            env.DB.prepare('INSERT INTO messages (id,project_id,role,content,created_at) VALUES (?,?,?,?,?)').bind(uuid(),project_id,'user',message,now),
-            env.DB.prepare('INSERT INTO messages (id,project_id,role,content,created_at) VALUES (?,?,?,?,?)').bind(uuid(),project_id,'jarvis',response,t2),
-            env.DB.prepare('UPDATE projects SET updated_at=? WHERE id=?').bind(t2,project_id),
+            env.DB.prepare('INSERT INTO messages (id,project_id,role,content,created_at) VALUES (?,?,?,?,?)').bind(uuid(),saveProjectId,'user',message,now),
+            env.DB.prepare('INSERT INTO messages (id,project_id,role,content,created_at) VALUES (?,?,?,?,?)').bind(uuid(),saveProjectId,'jarvis',response,t2),
+            env.DB.prepare('UPDATE projects SET updated_at=? WHERE id=?').bind(t2,saveProjectId),
           ]);
         }
       }
-      return json({ response, project_id: project_id ?? null, search_results: searchResults, search_query: searchQuery });
+      return json({ response, project_id: saveProjectId ?? null, search_results: searchResults, search_query: searchQuery, new_project: newProject, deleted_project_id: deletedProjectId });
     }
 
     // Direct paginated search (used by dashboard Load More)
@@ -542,23 +586,40 @@ async function handleRequest(request, env) {
 
     if (method === 'POST' && path === '/api/meshy/generate') {
       if (!env.MESHY_API_KEY) return err('Meshy not configured', 500);
-      const { prompt } = await request.json();
-      if (!prompt) return err('prompt required');
+      const { prompt, image_url, image_data } = await request.json();
+      const hasImage = !!(image_url || image_data);
+      if (!hasImage && !prompt) return err('prompt or image required');
+
       let r;
       try {
-        r = await fetch('https://api.meshy.ai/openapi/v2/text-to-3d', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.MESHY_API_KEY}` },
-          body: JSON.stringify({
-            mode:          'preview',
-            prompt,
-            ai_model:      'meshy-6',   // latest model (meshy-6 as of 2025)
-            model_type:    'standard',  // standard = high detail; 'lowpoly' for cleaner topology
-            symmetry_mode: 'auto',      // auto-detects bilateral symmetry (good for most objects)
-            topology:      'triangle',  // triangle mesh — most compatible with slicers
-            // art_style and negative_prompt are deprecated in meshy-6 — omitted intentionally
-          }),
-        });
+        if (hasImage) {
+          // ── Image-to-3D ───────────────────────────────────────────────────
+          // User provides a reference photo; Meshy generates geometry from it.
+          // prompt is optional — if provided it acts as a generation hint.
+          const body = {};
+          if (image_url)  body.image_url  = image_url;
+          if (image_data) body.image_data = image_data;
+          if (prompt)     body.prompt     = prompt;
+          r = await fetch('https://api.meshy.ai/openapi/v2/image-to-3d', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.MESHY_API_KEY}` },
+            body: JSON.stringify(body),
+          });
+        } else {
+          // ── Text-to-3D — direct pass-through, user prompt verbatim ────────
+          r = await fetch('https://api.meshy.ai/openapi/v2/text-to-3d', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.MESHY_API_KEY}` },
+            body: JSON.stringify({
+              mode:          'preview',
+              prompt,
+              ai_model:      'meshy-6',
+              model_type:    'standard',
+              symmetry_mode: 'auto',
+              topology:      'triangle',
+            }),
+          });
+        }
       } catch (fetchErr) {
         console.error('[jarvis] Meshy generate fetch failed:', fetchErr?.message);
         return err(`Meshy API unreachable: ${fetchErr?.message ?? 'network error'}`, 502);
@@ -568,38 +629,44 @@ async function handleRequest(request, env) {
         return err(e.message ?? `Meshy API ${r.status}`, r.status === 402 ? 402 : 502);
       }
       const data = await r.json();
-      return json({ task_id: data.result });
+      // Return mode so dashboard knows which status/save endpoint family to use
+      return json({ task_id: data.result, mode: hasImage ? 'image' : 'text' });
     }
 
     const meshyStatusMatch = path.match(/^\/api\/meshy\/status\/([^/]+)$/);
     if (method === 'GET' && meshyStatusMatch) {
       if (!env.MESHY_API_KEY) return err('Meshy not configured', 500);
-      const r = await fetch(`https://api.meshy.ai/openapi/v2/text-to-3d/${meshyStatusMatch[1]}`, {
+      const mode = url.searchParams.get('mode') ?? 'text';
+      const apiBase = mode === 'image'
+        ? 'https://api.meshy.ai/openapi/v2/image-to-3d'
+        : 'https://api.meshy.ai/openapi/v2/text-to-3d';
+      const r = await fetch(`${apiBase}/${meshyStatusMatch[1]}`, {
         headers: { Authorization: `Bearer ${env.MESHY_API_KEY}` },
       });
       if (!r.ok) return err(`Meshy API ${r.status}`, 502);
       const task = await r.json();
-      // Return a clean subset so the dashboard doesn't need to know the full schema
       return json({
-        status:        task.status,           // PENDING | IN_PROGRESS | SUCCEEDED | FAILED | EXPIRED
+        status:        task.status,
         progress:      task.progress ?? 0,
         thumbnail_url: task.thumbnail_url ?? null,
-        glb_url:       task.model_urls?.glb  ?? null,
-        prompt:        task.prompt            ?? '',
+        glb_url:       task.model_urls?.glb ?? null,
+        prompt:        task.prompt ?? '',
         error:         task.task_error?.message ?? null,
       });
     }
 
     if (method === 'POST' && path === '/api/meshy/save') {
       if (!env.MESHY_API_KEY) return err('Meshy not configured', 500);
-      const { task_id, project_id } = await request.json();
+      const { task_id, project_id, mode = 'text' } = await request.json();
       if (!task_id || !project_id) return err('task_id and project_id required');
 
       const proj = await env.DB.prepare('SELECT id FROM projects WHERE id=?').bind(project_id).first();
       if (!proj) return err('Project not found', 404);
 
-      // Re-fetch task to get model URLs (avoids passing URLs through the client)
-      const taskR = await fetch(`https://api.meshy.ai/openapi/v2/text-to-3d/${task_id}`, {
+      const apiBase = mode === 'image'
+        ? 'https://api.meshy.ai/openapi/v2/image-to-3d'
+        : 'https://api.meshy.ai/openapi/v2/text-to-3d';
+      const taskR = await fetch(`${apiBase}/${task_id}`, {
         headers: { Authorization: `Bearer ${env.MESHY_API_KEY}` },
       });
       if (!taskR.ok) return err(`Meshy task fetch failed: ${taskR.status}`, 502);
