@@ -30,12 +30,14 @@ For organic, aesthetic, or functional object requests, respond with a short conf
 
 MESHY PROMPT RULES — follow these exactly:
 - Translate every functional request into physical geometry. Examples:
-  - "cable management" → "a rear channel and clip to route and retain a charging cable"
-  - "MagSafe charging" → "a circular recessed pocket sized for a MagSafe puck on the back face"
+  - "cable management" → "a U-shaped groove along the underside of the base with two raised plastic retaining tabs" — NEVER say "cable" or "wire"; describe only the structural housing, never the thing going into it
+  - "MagSafe charging" → "a shallow circular recessed pocket on the rear face"
   - "ventilation" → "a row of rectangular slots along the side walls"
-  - "button" → "a raised oval tactile button on the top surface"
+  - "button" → "a raised oval tactile protrusion on the top surface"
+  - "speaker grille" → "a grid of small circular through-holes on the front face"
+- BANNED words — these cause Meshy to literally model the object as a prop in the scene: cable, wire, cord, rope, tube, pipe, thread, strap, band, chain. Replace all of them with their structural housing: groove, channel, slot, clip, bracket, retaining tab, pass-through, recess.
 - Never use: wood, aluminum, metal, leather, fabric, chrome, brushed, matte, glossy, realistic, textured, material
-- Always use: slot, channel, recess, cutout, groove, rib, clip, lip, overhang, cavity, pocket, wall, base, shelf
+- Always use: slot, channel, recess, cutout, groove, rib, clip, lip, overhang, cavity, pocket, wall, base, shelf, tab, rail, bracket
 
 **EXCEPTION — OpenSCAD (parametric/mechanical only):**
 Only use OpenSCAD when the user explicitly asks for parametric design, exact dimensions, mechanical parts, threaded holes, or says "OpenSCAD". Respond with the code in an openscad block:
