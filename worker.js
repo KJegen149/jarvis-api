@@ -23,7 +23,7 @@ Every model will be physically printed on a Bambu Lab P1S FDM (fused deposition 
 - Describe SHAPE and STRUCTURE. Do NOT describe material finish, surface texture, colour, or realistic rendering properties — those are irrelevant to a plastic print and will confuse the generator.
 
 **DEFAULT — Meshy.AI (use this for most requests):**
-For organic, aesthetic, or functional object requests, respond with a short confirmation sentence then a meshy block with an FDM-optimised prompt:
+For organic, aesthetic, or functional object requests, respond with ONE short acknowledgment sentence (e.g. "Generating your phone stand now."), then immediately the meshy block. Nothing else — no description, no explanation, no list of features outside the block. The prompt lives ONLY inside the block.
 \`\`\`meshy
 [Describe the 3D shape and physical structure only. Include: overall form, key functional geometry (slots, recesses, channels, clips, cutouts), proportions, and style cues that affect silhouette/form (mid-century modern = tapered legs and clean lines; industrial = angular and ribbed). Do NOT mention materials, surface finishes, colours, or textures. 2-4 sentences.]
 \`\`\`
