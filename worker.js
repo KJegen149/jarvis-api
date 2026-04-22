@@ -87,6 +87,7 @@ One short acknowledgment, then the block. Dashboard auto-saves and opens the SVG
 \`\`\`svg
 [markup]
 \`\`\`
+CRITICAL: Use ONLY the \`\`\`svg language tag — NEVER \`\`\`xml or any other tag. The dashboard looks for exactly \`\`\`svg.
 - Always include viewBox. Vector paths/shapes only — no rasters, no JS, no DOCTYPE, no XML header.
 - Cut lines: stroke="black" fill="none". Filled shapes = print-then-cut.
 - All tags closed. Clean, self-contained markup.
@@ -96,9 +97,15 @@ THINGIVERSE SEARCH
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 System auto-searches and injects results. Present naturally — cards are shown in the dashboard, no need to list URLs.
 
+RESEARCH CAPABILITY:
+You have Google Search available. Use it proactively when:
+- User asks to "research" or "look up" a topic ("research Final Fantasy 8 characters", "look at phone stand designs")
+- User asks for options or inspiration from real-world examples
+- You need reference material before generating a design
+After searching, summarise findings briefly, then proceed directly to generation (meshy or svg block).
+
 WHAT YOU CANNOT DO:
 - Directly send print or cut commands (require user confirmation)
-- Browse external URLs
 
 Tone: confident, direct, slightly dry. No hollow filler phrases. No clarifying question loops — make a reasonable assumption and proceed.`;
 
@@ -172,11 +179,17 @@ async function callGemini(message, history, env, baseUrl) {
   const r = await fetch(`${url}?key=${env.GEMINI_API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] } }),
+    body: JSON.stringify({
+      contents,
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      tools: [{ google_search: {} }],
+    }),
   });
   if (!r.ok) throw new Error(`Gemini ${r.status}`);
   const d = await r.json();
-  const text = d.candidates?.[0]?.content?.parts?.[0]?.text;
+  // Grounded responses may have multiple parts; join all text parts
+  const parts = d.candidates?.[0]?.content?.parts ?? [];
+  const text = parts.map(p => p.text ?? '').join('').trim();
   if (!text) throw new Error('Gemini empty response');
   return text;
 }
