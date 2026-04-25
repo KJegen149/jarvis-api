@@ -584,22 +584,55 @@ async function handleRequest(request, env) {
       return json(await r.json());
     }
 
+    // ── Serve temp images publicly so Meshy can fetch them ───────────────────
+    // No auth — these are random-keyed temp files, only accessible by key
+    const publicTempMatch = path.match(/^\/api\/public\/temp\/([^/]+)$/);
+    if (method === 'GET' && publicTempMatch) {
+      const key = `temp/${publicTempMatch[1]}`;
+      const obj = await env.FILES.get(key);
+      if (!obj) return err('Not found', 404);
+      return new Response(obj.body, {
+        headers: {
+          'Content-Type': obj.httpMetadata?.contentType ?? 'image/jpeg',
+          'Cache-Control': 'public, max-age=3600',
+          ...CORS,
+        },
+      });
+    }
+
+    // ── Upload reference image to R2, return public URL for Meshy ────────────
+    if (method === 'POST' && path === '/api/meshy/upload-image') {
+      const body = await request.arrayBuffer();
+      if (!body.byteLength) return err('empty body', 400);
+      // Detect mime type from magic bytes
+      const header = new Uint8Array(body, 0, 12);
+      let mime = 'image/jpeg', ext = 'jpg';
+      if (header[0]===0x89 && header[1]===0x50) { mime = 'image/png';  ext = 'png';  }
+      else if (header[0]===0xFF && header[1]===0xD8) { mime = 'image/jpeg'; ext = 'jpg'; }
+      else if (header[0]===0x52 && header[1]===0x49) { mime = 'image/webp'; ext = 'webp'; }
+      else if (header[0]===0x47 && header[1]===0x49) { mime = 'image/gif';  ext = 'gif';  }
+      const tempId  = uuid();
+      const tempKey = `temp/${tempId}.${ext}`;
+      await env.FILES.put(tempKey, body, { httpMetadata: { contentType: mime } });
+      const origin   = new URL(request.url).origin;
+      const publicUrl = `${origin}/api/public/temp/${tempId}.${ext}`;
+      return json({ url: publicUrl, key: tempKey });
+    }
+
     if (method === 'POST' && path === '/api/meshy/generate') {
       if (!env.MESHY_API_KEY) return err('Meshy not configured', 500);
-      const { prompt, image_url, image_data } = await request.json();
-      const hasImage = !!(image_url || image_data);
-      if (!hasImage && !prompt) return err('prompt or image required');
+      const { prompt, image_url } = await request.json();
+      // NOTE: image_data (base64) is NOT used — Meshy only accepts public URLs.
+      // The dashboard uploads images via /api/meshy/upload-image first to get a URL.
+      const hasImage = !!image_url;
+      if (!hasImage && !prompt) return err('prompt or image_url required');
 
       let r;
       try {
         if (hasImage) {
-          // ── Image-to-3D ───────────────────────────────────────────────────
-          // User provides a reference photo; Meshy generates geometry from it.
-          // prompt is optional — if provided it acts as a generation hint.
-          const body = {};
-          if (image_url)  body.image_url  = image_url;
-          if (image_data) body.image_data = image_data;
-          if (prompt)     body.prompt     = prompt;
+          // ── Image-to-3D: Meshy fetches the image from our public R2 URL ───
+          const body = { image_url };
+          if (prompt) body.prompt = prompt;   // optional hint for the model
           r = await fetch('https://api.meshy.ai/openapi/v2/image-to-3d', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.MESHY_API_KEY}` },
