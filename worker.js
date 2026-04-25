@@ -627,11 +627,40 @@ async function handleRequest(request, env) {
       const hasImage = !!image_url;
       if (!hasImage && !prompt) return err('prompt or image_url required');
 
+      // ── If image_url is external, proxy it through R2 so Meshy can always reach it ─────────
+      // Meshy's servers can't access all public URLs (bot protection, redirects, etc.).
+      // Storing the image in our own R2 gives Meshy a guaranteed-accessible URL.
+      let finalImageUrl = image_url;
+      if (hasImage) {
+        const ownOrigin = new URL(request.url).origin;
+        if (!image_url.startsWith(ownOrigin)) {
+          try {
+            const imgR = await fetch(image_url, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JarvisBot/1.0)' },
+              redirect: 'follow',
+            });
+            if (imgR.ok) {
+              const imgBuf = await imgR.arrayBuffer();
+              const ct  = imgR.headers.get('content-type') ?? 'image/jpeg';
+              const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : ct.includes('gif') ? 'gif' : 'jpg';
+              const tempId  = uuid();
+              const tempKey = `temp/${tempId}.${ext}`;
+              await env.FILES.put(tempKey, imgBuf, { httpMetadata: { contentType: ct } });
+              finalImageUrl = `${ownOrigin}/api/public/temp/${tempId}.${ext}`;
+              console.log('[jarvis] Proxied external image to R2:', image_url, '→', finalImageUrl);
+            }
+          } catch (proxyErr) {
+            // Proxy failed — let Meshy try the original URL anyway
+            console.warn('[jarvis] Image proxy failed, passing URL directly to Meshy:', proxyErr?.message);
+          }
+        }
+      }
+
       let r;
       try {
         if (hasImage) {
           // ── Image-to-3D: Meshy fetches the image from our public R2 URL ───
-          const body = { image_url };
+          const body = { image_url: finalImageUrl };
           if (prompt) body.prompt = prompt;   // optional hint for the model
           r = await fetch('https://api.meshy.ai/openapi/v2/image-to-3d', {
             method: 'POST',
