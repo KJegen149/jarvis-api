@@ -694,7 +694,7 @@ async function handleRequest(request, env) {
         console.error('[jarvis] Meshy generate error', r.status, errText);
         let e = {};
         try { e = JSON.parse(errText); } catch {}
-        const msg = e.message ?? e.error ?? errText.slice(0, 200) || `HTTP ${r.status}`;
+        const msg = e.message || e.error || errText.slice(0, 200) || `HTTP ${r.status}`;
         return err(`Meshy ${r.status}: ${msg}`, r.status === 402 ? 402 : 502);
       }
       const data = await r.json();
