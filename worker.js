@@ -629,42 +629,38 @@ async function handleRequest(request, env) {
       const hasImage = !!image_url;
       if (!hasImage && !prompt) return err('prompt or image_url required');
 
-      // ── If image_url is external, proxy it through R2 so Meshy can always reach it ─────────
-      // Meshy's servers can't access all public URLs (bot protection, redirects, etc.).
-      // Storing the image in our own R2 gives Meshy a guaranteed-accessible URL.
+      // ── Prepare image for Meshy ───────────────────────────────────────────────
+      // Meshy v1 image-to-3D accepts both public URLs and base64 data URIs.
+      // Dashboard sends data: URIs directly (from FileReader). External pasted URLs
+      // are fetched server-side and converted to base64 so Meshy can always access them.
       let finalImageUrl = image_url;
-      if (hasImage) {
-        const ownOrigin = new URL(request.url).origin;
-        if (!image_url.startsWith(ownOrigin)) {
-          try {
-            const imgR = await fetch(image_url, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JarvisBot/1.0)' },
-              redirect: 'follow',
-            });
-            if (imgR.ok) {
-              const imgBuf = await imgR.arrayBuffer();
-              const ct  = imgR.headers.get('content-type') ?? 'image/jpeg';
-              const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : ct.includes('gif') ? 'gif' : 'jpg';
-              const tempId  = uuid();
-              const tempKey = `temp/${tempId}.${ext}`;
-              await env.FILES.put(tempKey, imgBuf, { httpMetadata: { contentType: ct } });
-              finalImageUrl = `${ownOrigin}/api/public/temp/${tempId}.${ext}`;
-              console.log('[jarvis] Proxied external image to R2:', image_url, '→', finalImageUrl);
-            }
-          } catch (proxyErr) {
-            // Proxy failed — let Meshy try the original URL anyway
-            console.warn('[jarvis] Image proxy failed, passing URL directly to Meshy:', proxyErr?.message);
+      if (hasImage && !image_url.startsWith('data:')) {
+        try {
+          const imgR = await fetch(image_url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JarvisBot/1.0)' },
+            redirect: 'follow',
+          });
+          if (imgR.ok) {
+            const imgBuf = await imgR.arrayBuffer();
+            const ct = imgR.headers.get('content-type') || 'image/jpeg';
+            const bytes = new Uint8Array(imgBuf);
+            let bin = '';
+            for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+            finalImageUrl = `data:${ct};base64,${btoa(bin)}`;
+            console.log('[jarvis] Converted external URL to base64 data URI:', image_url.slice(0, 60));
           }
+        } catch (proxyErr) {
+          console.warn('[jarvis] Image fetch failed, passing URL directly to Meshy:', proxyErr?.message);
         }
       }
 
       let r;
       try {
         if (hasImage) {
-          // ── Image-to-3D: Meshy fetches the image from our public R2 URL ───
+          // ── Image-to-3D: uses Meshy API v1 (not v2) ──────────────────────
           const body = { image_url: finalImageUrl };
           if (prompt) body.prompt = prompt;   // optional hint for the model
-          r = await fetch('https://api.meshy.ai/openapi/v2/image-to-3d', {
+          r = await fetch('https://api.meshy.ai/openapi/v1/image-to-3d', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.MESHY_API_KEY}` },
             body: JSON.stringify(body),
@@ -707,7 +703,7 @@ async function handleRequest(request, env) {
       if (!env.MESHY_API_KEY) return err('Meshy not configured', 500);
       const mode = url.searchParams.get('mode') ?? 'text';
       const apiBase = mode === 'image'
-        ? 'https://api.meshy.ai/openapi/v2/image-to-3d'
+        ? 'https://api.meshy.ai/openapi/v1/image-to-3d'  // image-to-3D is v1
         : 'https://api.meshy.ai/openapi/v2/text-to-3d';
       const r = await fetch(`${apiBase}/${meshyStatusMatch[1]}`, {
         headers: { Authorization: `Bearer ${env.MESHY_API_KEY}` },
@@ -733,7 +729,7 @@ async function handleRequest(request, env) {
       if (!proj) return err('Project not found', 404);
 
       const apiBase = mode === 'image'
-        ? 'https://api.meshy.ai/openapi/v2/image-to-3d'
+        ? 'https://api.meshy.ai/openapi/v1/image-to-3d'  // image-to-3D is v1
         : 'https://api.meshy.ai/openapi/v2/text-to-3d';
       const taskR = await fetch(`${apiBase}/${task_id}`, {
         headers: { Authorization: `Bearer ${env.MESHY_API_KEY}` },
