@@ -251,11 +251,29 @@ export default {
 };
 
 async function handleRequest(request, env) {
-    if (!authCheck(request, env)) return err('Unauthorized', 401);
-
     const url    = new URL(request.url);
     const path   = url.pathname.replace(/\/$/, '');
     const method = request.method;
+
+    // ── Public endpoints — no auth required ─────────────────────────────────
+    // Temp images served publicly so Meshy (and other external services) can
+    // fetch them. Security: protected by UUID key obscurity only.
+    const publicTempMatch = path.match(/^\/api\/public\/temp\/([^/]+)$/);
+    if (method === 'GET' && publicTempMatch) {
+      const key = `temp/${publicTempMatch[1]}`;
+      const obj = await env.FILES.get(key);
+      if (!obj) return err('Not found', 404);
+      return new Response(obj.body, {
+        headers: {
+          'Content-Type': obj.httpMetadata?.contentType ?? 'image/jpeg',
+          'Cache-Control': 'public, max-age=3600',
+          ...CORS,
+        },
+      });
+    }
+
+    // ── Everything else requires auth ────────────────────────────────────────
+    if (!authCheck(request, env)) return err('Unauthorized', 401);
 
     if (method === 'GET' && path === '/api/projects') {
       const { results } = await env.DB.prepare(
@@ -582,22 +600,6 @@ async function handleRequest(request, env) {
       });
       if (!r.ok) return err(`Meshy API ${r.status}`, 502);
       return json(await r.json());
-    }
-
-    // ── Serve temp images publicly so Meshy can fetch them ───────────────────
-    // No auth — these are random-keyed temp files, only accessible by key
-    const publicTempMatch = path.match(/^\/api\/public\/temp\/([^/]+)$/);
-    if (method === 'GET' && publicTempMatch) {
-      const key = `temp/${publicTempMatch[1]}`;
-      const obj = await env.FILES.get(key);
-      if (!obj) return err('Not found', 404);
-      return new Response(obj.body, {
-        headers: {
-          'Content-Type': obj.httpMetadata?.contentType ?? 'image/jpeg',
-          'Cache-Control': 'public, max-age=3600',
-          ...CORS,
-        },
-      });
     }
 
     // ── Upload reference image to R2, return public URL for Meshy ────────────
