@@ -689,8 +689,13 @@ async function handleRequest(request, env) {
         return err(`Meshy API unreachable: ${fetchErr?.message ?? 'network error'}`, 502);
       }
       if (!r.ok) {
-        const e = await r.json().catch(() => ({}));
-        return err(e.message ?? `Meshy API ${r.status}`, r.status === 402 ? 402 : 502);
+        // Expose full status so callers can diagnose (404=endpoint/URL not found, 400/422=bad request, 402=credits)
+        const errText = await r.text().catch(() => '');
+        console.error('[jarvis] Meshy generate error', r.status, errText);
+        let e = {};
+        try { e = JSON.parse(errText); } catch {}
+        const msg = e.message ?? e.error ?? errText.slice(0, 200) || `HTTP ${r.status}`;
+        return err(`Meshy ${r.status}: ${msg}`, r.status === 402 ? 402 : 502);
       }
       const data = await r.json();
       // Return mode so dashboard knows which status/save endpoint family to use
